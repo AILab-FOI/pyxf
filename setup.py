@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from distutils.core import setup
-import pyxf
+from pyxf.pyxf import __version__
 
 setup(name='PyXF',
       version=pyxf.__version__,
