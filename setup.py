@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
 from distutils.core import setup
-from pyxf import _version_
+import pyxf
 
 setup(name='PyXF',
-      version=_version_,
+      version=pyxf.__version__,
       description='Python interface to XSB, SWI, ECLiPSe Prolog and Flora-2/Ergo Lite',
       author='Markus Schatten',
       author_email='markus.schatten@foi.hr',

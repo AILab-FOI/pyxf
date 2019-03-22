@@ -19,7 +19,6 @@ __doc__ = ''' Python interface to XSB Prolog, SWI Prolog, ECLiPSe Prolog and Flo
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA'''
 
 __version__ = '1.0.5'
-_version_ = __version__ # Just for the setup.py file to feel happy again
 
 import pexpect as px
 import re
