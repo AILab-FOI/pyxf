@@ -3,4 +3,6 @@ john[ likes->curry ].
 sandy[ likes->mushrooms ].
 
 ?x[ dislikes->?y ] :-
-	?x[ not( likes->?y ) ].
+	?_someone[ likes->?y ],
+	?x[ likes->?_something ],
+	\naf ?x[ likes->?y ].
