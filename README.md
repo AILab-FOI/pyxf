@@ -6,10 +6,10 @@ Installation
 
 Just run te setup file:
 
-'''
+```
 python setup.py build
 python setup.py install
-'''
+```
 
 
 
