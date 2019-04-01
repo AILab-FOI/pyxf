@@ -4,7 +4,7 @@ Python 2 and Python 3 interface to XSB Prolog, SWI Prolog, ECLiPSe Prolog and Fl
 Installation
 ============
 
-Just run te setup file:
+Just run the setup file:
 
 ```
 python setup.py build
