@@ -382,15 +382,21 @@ class Flora2CompileError(Exception):
 class Flora2QueryError(Exception):
     '''Exception raised if query raises an error.'''
     pass
+  
+  
+class Flora2FactError(Exception):
+    '''Exception raised if facts raise an error.'''
+    pass
 
 
 class flora2:
     '''Python interface to Flora2 (http://flora.sf.net)'''
-    def __init__(self, path='runflora', args='--nobanner --quietload'):
+    def __init__(self, path='runflora', args='--nobanner --quietload', expert=False):
         '''Constructor method
         Usage: flora2( path, args )
         path - path to Flora2 executable (default: 'runflora')
         args - command line arguments (default: '--nobanner --quietload')
+        expert - whether to activate expert mode
 
         self.engine becomes pexpect spawn instance of Flora2 shell
 
@@ -398,6 +404,11 @@ class flora2:
         try:
             self.engine = px.spawn(path + ' ' + args, timeout=5)
             self.engine.expect(flora2prompt)
+            if expert:
+                self.engine.sendline('expert{yes}.')
+                index = self.engine.expect([flora2prompt, flora2error])
+                if index == 1:
+                    raise Flora2CompileError('Error setting expert mode. Error from Flora2:\n' + str( self.engine.after ))
         except px.ExceptionPexpect:
             raise Flora2ExecutableNotFound('Flora-2 executable not found on the specified path. Try using flora2( "/path/to/flora2/runflora" )')
 
@@ -460,6 +471,26 @@ class flora2:
                         results.append(dict(temp))
                         temp = []
                 return results
+
+    def addfacts(self, facts):
+        '''
+        Adds a facts to the reasoner.
+        Usage: instance.addfacts( facts )
+        facts - Python list of usual Flora2 fact strings. (example: 'bob[ likes->tomato ]')
+
+        Raises Flora2FactError on error inserting fact. 
+        '''
+
+        for f in facts:
+            command = 'insert{' + f + '}.'
+            self.engine.sendline(command)
+            index = self.engine.expect([flora2prompt, flora2error])
+            if index == 1:
+                raise Flora2FactError('Error while adding fact "' + f + '". The command sent was ' + command + '. Error from Flora2:\n' + str( self.engine.after ))
+            else:
+                if "Yes" not in str( self.engine.before ):
+                    raise Flora2FactError('Error while adding fact "' + f + '". Error from Flora2:\n' + str( self.engine.after ))
+
 
 if __name__ == '__main__':
     x = xsb()
