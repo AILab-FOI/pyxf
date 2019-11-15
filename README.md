@@ -11,6 +11,18 @@ python setup.py build
 python setup.py install
 ```
 
+To install with pip just type:
+
+```
+sudo pip install git+https://github.com/AILab-FOI/pyxf
+```
+
+or for Python 3
+
+```
+sudo pip3 install git+https://github.com/AILab-FOI/pyxf
+```
+
 
 
 
