@@ -1,5 +1,5 @@
 # pyxf
-Python 2 and Python 3 interface to XSB Prolog, SWI Prolog, ECLiPSe Prolog and Flora-2/Ergo Lite.
+Python 2 and Python 3 interface to XSB Prolog, SWI Prolog, ECLiPSe Prolog, Flora-2/Ergo Lite and DES (Datalog Educational System).
 
 Installation
 ============
