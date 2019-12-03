@@ -18,10 +18,12 @@ __doc__ = ''' Python interface to XSB Prolog, SWI Prolog, ECLiPSe Prolog and Flo
  License along with this library; if not, write to the Free Software
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA'''
 
-__version__ = '1.0.5'
+__version__ = '1.0.6'
 
 import pexpect as px
 import re
+import warnings
+from collections import OrderedDict
 
 xsbprompt = '[|][ ][?][-][ ]'
 xsberror = '[+][+]Error.*'
@@ -65,7 +67,7 @@ class xsb:
     def load(self, module):
         '''Loads module into self.engine
         Usage: instance.load( path )
-        path - path to module file
+        module - path to module file
 
         Raises: XSBCompileError'''
         self.engine.sendline("['" + module + "'].")
@@ -177,7 +179,7 @@ class swipl:
     def load(self, module):
         '''Loads module into self.engine
         Usage: instance.load( path )
-        path - path to module file
+        module - path to module file
 
         Raises: SWICompileError'''
         self.engine.sendline("['" + module + "'].")
@@ -289,7 +291,7 @@ class eclipse:
     def load(self, module):
         '''Loads module into self.engine
         Usage: instance.load( path )
-        path - path to module file
+        module - path to module file
 
         Raises: ECLiPSeCompileError'''
         self.engine.sendline("['" + module + "'].")
@@ -415,7 +417,7 @@ class flora2:
     def load(self, module):
         '''Loads module into self.engine
         Usage: instance.load( path )
-        path - path to module file
+        module - path to module file
 
         Raises: Flora2CompileError'''
         self.engine.sendline("['" + module + "'].")
@@ -492,6 +494,150 @@ class flora2:
                     raise Flora2FactError('Error while adding fact "' + f + '". Error from Flora2:\n' + str( self.engine.after ))
 
 
+desprompt = '[D][E][S][>][ ]'
+deserror = 'Error[:][ ].*'
+destapiprompt = '[|][:]'
+destapierror = '[$]error[\r][\n][01].*'
+destapisuccess = '[$]success[\r][\n]' + destapiprompt
+destapiend = '[$]eo[ft][\r][\n]' + destapiprompt
+
+class DESExecutableNotFound(Exception):
+    '''Exception raised if DES executable is not found on the specified path.'''
+    pass
+
+
+class DESCompileError(Exception):
+    '''Exception raised if loaded module has compile errors.'''
+    pass
+
+
+class DESQueryError(Exception):
+    '''Exception raised if query raises an error.'''
+    pass
+
+
+class des:
+    '''Python interface to Datalog Educational System (http://des.sf.net)'''
+    def __init__(self, path='des_start', args=''):
+        '''Constructor method
+        Usage: des( path, args )
+        path - path to DES executable (default: 'des_start')
+        args - command line arguments (default: '')
+
+        self.engine becomes pexpect spawn instance of XSB Prolog shell
+
+        Raises: DESExecutableNotFound'''
+        try:
+            self.engine = px.spawn(path + ' ' + args, timeout=5)
+            self.engine.expect(desprompt)
+        except px.ExceptionPexpect:
+            raise DESExecutableNotFound('DES executable not found on the specified path. Try using xsb( "/path/to/DES/bin/des_start" )')
+
+    def connect(self, dsn, username='', password=''):
+        '''Connects to a system or user DSN
+        Usage: instance.connect(dsn, username, password)
+        dsn - Data Source Name (as specified in .odbc.ini
+        username - username for the DSN (default '')
+        password - password for the DSN (default '')
+
+        Raises: DESCompileError'''
+        query = "/open_db %s" % dsn
+        if username:
+            query += " user('%s')" % username
+        if password:
+            query += " password('%s')" % password
+
+        self.engine.sendline( '/tapi ' + query )
+        index = self.engine.expect([destapisuccess, destapierror])
+        if index == 1:
+            raise DESCompileError('Error while connecting to DSN "' + dsn + '". Error from DES:\n' + str( self.engine.after ))
+
+    def command(self, cmd, args=''):
+        '''Issues a DES command
+        Usage: instance.command(cmd, args)
+        cmd - command with '/'
+        args - optional (string, not list) arguments (default '')
+        
+        Returns: raw text command output (utf8 string)'''
+        self.engine.sendline(cmd + ' ' + args)
+        index = self.engine.expect([desprompt, destapiprompt, deserror])
+        if index == 2:
+            raise DESCompileError('Error while issuing command "' + cmd + '". Error from DES:\n' + str( self.engine.after ))
+        res = self.engine.before
+        return res.decode( 'utf8' )
+        
+        
+    def load(self, module):
+        '''Loads/restores module (DDB) into self.engine
+        Usage: instance.load( path )
+        module - path to module file
+
+        Raises: Warning'''
+        self.engine.sendline("/tapi /restore_ddb " + module)
+        index = self.engine.expect([destapisuccess, destapiend, destapierror])
+        if index == 1:
+            warnings.warn('Possible error while restoring DDB "' + module + '". Output from DES:\n' + str( self.engine.after ))
+
+    def query(self, query):
+        '''Queries current engine state
+        Usage: instance.query( query )
+        query - usual DES query (example: 'likes( X, Y )')
+
+        Returns:
+          True - if yes/no query and answer is yes
+          False - if yes/no query and answer is no
+          List of dictionaries - if normal query. Dictionary keys are returned
+          variable names. Example:
+          >>> instance.query( 'likes( Person, Food )' )
+          [{'Person': 'john', 'Food': 'curry'}, {'Person': 'sandy', 'Food': 'mushrooms'}]
+
+        Raises: DESQueryError'''
+        query = query.strip()
+        if query[-1] != '.':
+            query += '.'
+        lvars = var_re.findall(query)
+        lvars = list( OrderedDict.fromkeys( lvars ) )
+        if lvars == []:  # yes/no query (no variables)
+            self.engine.sendline(query)
+            index = self.engine.expect([desprompt, deserror])
+            if index == 1:
+                raise DESQueryError('Error while executing query "' + query + '". Error from XSB:\n' + str( self.engine.after ))
+            else:
+                if '0 tuples computed' in str( self.engine.before ):
+                    return False
+                else:
+                    return True
+        else:  # normal query
+            self.engine.sendline('/tapi ' + query)
+            index = self.engine.expect([destapierror, destapiprompt])
+            if index == 0:
+                raise DESQueryError('Error while executing query "' + query + '". Error from DES:\n' + str( self.engine.after ))
+            else:
+                if '/assert' in query: # assertion, if there's no error, it's fine
+                    return True
+                state = str( self.engine.before )
+                state = state.split( '$eot' )
+                if 'Processing:' in state[ 0 ]:
+                    state = state[ 1 ]
+                else:
+                    state = state[ 0 ]
+                
+                state = state.split( '$\\r\\n' )
+                py2 = False
+                if len( state ) == 1:
+                    py2 = True
+                    state = state[ 0 ].split( '$\r\n' ) # Py2 hack
+                if py2:
+                    res = [ i.split( '\r\n' )[ :-1 ] for i in state[ 1: ] ]
+                else:
+                    res = [ i.split( '\\r\\n' )[ :-1 ] for i in state[ 1: ] ]
+                res = [ [ j[ 1:-1 ] for j in i ] for i in res ]
+                results = []
+                for i in res:
+                    results.append( dict( zip( lvars, i ) ) )
+                return results
+
+                
 if __name__ == '__main__':
     x = xsb()
     x.load('test/logic/test_xsb')
@@ -522,3 +668,14 @@ if __name__ == '__main__':
     print ( f.query('john[ dislikes->mushrooms ]') )
     print ( f.query('?person[ likes->?food ]') )
     del f
+
+    d = des()
+    try:
+        d.connect( 'db', 'user', 'pass' )
+        print( d.command( '/listing' ) )
+        d.load( 'test/logic/test_des.pl' )
+        print( d.query( 'dislikes( john, mushrooms )' ) )
+        print ( d.query('likes( Person, Food )') )
+    except Exception as e:
+        print( e )
+        print( 'Please instal a valid ODBC DSN!' )
